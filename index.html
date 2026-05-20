@@ -478,6 +478,11 @@
       return isAppleDevice && !window.MSStream;
     };
 
+    const isIOSSimulator = () => {
+      const ua = navigator.userAgent || "";
+      return /simulator/i.test(ua);
+    };
+
     const getNumberFromHref = (href) => {
       const withoutScheme = href.replace(/^(tel:|sms:)/i, "");
       const beforeParams = withoutScheme.split(/[?;#]/)[0];
@@ -665,6 +670,11 @@
         const number = getNumberFromHref(rawHref);
         if (!number) {
           showFallbackModal("Number", rawHref);
+          return;
+        }
+
+        if (isIOS() && isIOSSimulator()) {
+          showFallbackModal("Not supported in iOS Simulator", number.replace(/[^\d+]/g, ""));
           return;
         }
 

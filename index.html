@@ -469,5 +469,219 @@
   If you are in immediate danger, call <strong>911</strong>.
 </footer>
 
+<script>
+  (() => {
+    const isIOS = () => {
+      const ua = navigator.userAgent || "";
+      const platform = navigator.platform || "";
+      const isAppleDevice = /iPad|iPhone|iPod/i.test(ua) || /iPad|iPhone|iPod/i.test(platform);
+      return isAppleDevice && !window.MSStream;
+    };
+
+    const getNumberFromHref = (href) => {
+      const withoutScheme = href.replace(/^(tel:|sms:)/i, "");
+      const beforeParams = withoutScheme.split(/[?;#]/)[0];
+      return beforeParams.replace(/[^\d+]/g, "");
+    };
+
+    const showFallbackModal = (() => {
+      let root = null;
+      let titleEl = null;
+      let valueEl = null;
+      let copyBtn = null;
+      let closeBtn = null;
+      let lastFocused = null;
+      let currentValue = "";
+
+      const close = () => {
+        if (!root) return;
+        root.style.display = "none";
+        if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+      };
+
+      const ensure = () => {
+        if (root) return;
+
+        root = document.createElement("div");
+        root.id = "fallbackModal";
+        root.setAttribute("role", "dialog");
+        root.setAttribute("aria-modal", "true");
+        root.style.position = "fixed";
+        root.style.inset = "0";
+        root.style.display = "none";
+        root.style.alignItems = "flex-end";
+        root.style.justifyContent = "center";
+        root.style.padding = "18px";
+        root.style.zIndex = "9999";
+
+        const backdrop = document.createElement("div");
+        backdrop.style.position = "absolute";
+        backdrop.style.inset = "0";
+        backdrop.style.background = "rgba(0,0,0,0.4)";
+        backdrop.addEventListener("click", close);
+
+        const sheet = document.createElement("div");
+        sheet.style.position = "relative";
+        sheet.style.width = "100%";
+        sheet.style.maxWidth = "520px";
+        sheet.style.borderRadius = "16px";
+        sheet.style.border = "1px solid rgba(0,0,0,0.08)";
+        sheet.style.background = "#fff";
+        sheet.style.boxShadow = "0 18px 60px rgba(0,0,0,0.25)";
+        sheet.style.padding = "14px 14px 12px";
+
+        titleEl = document.createElement("div");
+        titleEl.style.fontFamily = "'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        titleEl.style.fontWeight = "600";
+        titleEl.style.fontSize = "14px";
+        titleEl.style.color = "#1a2e28";
+        titleEl.style.marginBottom = "8px";
+
+        valueEl = document.createElement("div");
+        valueEl.style.fontFamily = "'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        valueEl.style.fontWeight = "600";
+        valueEl.style.fontSize = "18px";
+        valueEl.style.color = "#1a2e28";
+        valueEl.style.padding = "10px 12px";
+        valueEl.style.borderRadius = "12px";
+        valueEl.style.background = "#faf7f2";
+        valueEl.style.border = "1px solid #e8ddd1";
+        valueEl.style.wordBreak = "break-word";
+        valueEl.style.marginBottom = "12px";
+        valueEl.style.userSelect = "text";
+
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.gap = "10px";
+
+        copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.textContent = "Copy";
+        copyBtn.style.flex = "1";
+        copyBtn.style.border = "1px solid #d6e8e4";
+        copyBtn.style.background = "#d6ebe6";
+        copyBtn.style.color = "#2e6b5e";
+        copyBtn.style.borderRadius = "12px";
+        copyBtn.style.padding = "10px 12px";
+        copyBtn.style.fontFamily = "'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        copyBtn.style.fontWeight = "600";
+        copyBtn.style.fontSize = "14px";
+        copyBtn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(currentValue);
+            copyBtn.textContent = "Copied";
+            setTimeout(() => {
+              if (copyBtn) copyBtn.textContent = "Copy";
+            }, 900);
+          } catch {
+            const ta = document.createElement("textarea");
+            ta.value = currentValue;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+              document.execCommand("copy");
+              copyBtn.textContent = "Copied";
+              setTimeout(() => {
+                if (copyBtn) copyBtn.textContent = "Copy";
+              }, 900);
+            } finally {
+              ta.remove();
+            }
+          }
+        });
+
+        closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.textContent = "Close";
+        closeBtn.style.flex = "1";
+        closeBtn.style.border = "1px solid #e8ddd1";
+        closeBtn.style.background = "#fff";
+        closeBtn.style.color = "#3d5249";
+        closeBtn.style.borderRadius = "12px";
+        closeBtn.style.padding = "10px 12px";
+        closeBtn.style.fontFamily = "'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        closeBtn.style.fontWeight = "600";
+        closeBtn.style.fontSize = "14px";
+        closeBtn.addEventListener("click", close);
+
+        row.appendChild(copyBtn);
+        row.appendChild(closeBtn);
+
+        sheet.appendChild(titleEl);
+        sheet.appendChild(valueEl);
+        sheet.appendChild(row);
+
+        root.appendChild(backdrop);
+        root.appendChild(sheet);
+
+        root.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") close();
+        });
+
+        document.body.appendChild(root);
+      };
+
+      return (title, value) => {
+        ensure();
+        lastFocused = document.activeElement;
+        currentValue = value;
+        titleEl.textContent = title;
+        valueEl.textContent = value;
+        root.style.display = "flex";
+        closeBtn.focus();
+      };
+    })();
+
+    const attemptOpen = (url, fallbackTitle, fallbackValue) => {
+      let didHide = false;
+      const onHide = () => {
+        didHide = true;
+      };
+      document.addEventListener("visibilitychange", onHide, { once: true });
+      window.addEventListener("pagehide", onHide, { once: true });
+      window.location.href = url;
+
+      setTimeout(() => {
+        if (!didHide) showFallbackModal(fallbackTitle, fallbackValue);
+      }, 900);
+    };
+
+    const links = Array.from(document.querySelectorAll("a.card"));
+    for (const link of links) {
+      const href = link.getAttribute("href") || "";
+      if (!/^tel:|^sms:/i.test(href)) continue;
+
+      if (/^sms:/i.test(href) && link.querySelector(".card-detail")?.textContent?.includes("HOME")) {
+        link.dataset.smsBody = "HOME";
+      }
+
+      link.addEventListener("click", (e) => {
+        const rawHref = link.getAttribute("href") || "";
+        if (!/^tel:|^sms:/i.test(rawHref)) return;
+        e.preventDefault();
+
+        const number = getNumberFromHref(rawHref);
+        if (!number) {
+          showFallbackModal("Number", rawHref);
+          return;
+        }
+
+        if (/^tel:/i.test(rawHref)) {
+          const url = `tel:${number}`;
+          attemptOpen(url, "Call this number", number);
+          return;
+        }
+
+        const smsNumber = number.replace(/[^\d]/g, "");
+        const body = (link.dataset.smsBody || "").trim();
+        const url = body && !isIOS() ? `sms:${smsNumber}?body=${encodeURIComponent(body)}` : `sms:${smsNumber}`;
+        attemptOpen(url, "Text this number", smsNumber);
+      });
+    }
+  })();
+</script>
+
 </body>
 </html>
